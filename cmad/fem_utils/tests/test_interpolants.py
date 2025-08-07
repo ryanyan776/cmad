@@ -53,6 +53,19 @@ class TestInterpolants(unittest.TestCase):
             for j in range(len(dshape)):
                 gradient = dshape[j]
                 assert np.allclose(np.sum(gradient, axis = 1), np.zeros(len(gradient)))
+    
+    def test_brick_shape_functions(self):
+        for i in range(2, 7):
+            test_points = quadrature_rule.create_quadrature_rule_on_brick(i).xigauss
+            shape_func_brick = interpolants.shape_brick(test_points)
+            shape = shape_func_brick.values
+            dshape = shape_func_brick.gradients
+
+            assert np.allclose(np.sum(shape, axis = 1), np.ones(len(shape)))
+
+            for j in range(len(dshape)):
+                gradient = dshape[j]
+                assert np.allclose(np.sum(gradient, axis = 1), np.zeros(len(gradient)))
 
 if __name__ == "__main__":
     Interpolants_test_suite = unittest.TestLoader().loadTestsFromTestCase(

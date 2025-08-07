@@ -330,3 +330,43 @@ def create_quadrature_rule_on_tetrahedron(degree):
         raise ValueError("Quadrature of precision this high is not implemented.")
 
     return QuadratureRule(xi, w)
+
+def create_quadrature_rule_on_brick(degree):
+    """
+    Create a Gauss-Legendre quadrature rule on the reference 8-node brick element
+    (hexahedron) defined over [-1, 1]^3.
+
+    Parameters
+    ----------
+    degree : int
+        The number of Gauss points per direction (not the polynomial degree).
+
+    Returns
+    -------
+    xi : ndarray of shape (num_points, 3)
+        Quadrature points in the reference cube [-1, 1]^3.
+
+    w : ndarray of shape (num_points,)
+        Quadrature weights.
+    """
+    # 1D quadrature rule
+    n = int(np.ceil((degree + 1) / 2))
+    x_1d, w_1d = scipy.special.roots_sh_legendre(n)
+    x_1d = -1 + 2 * x_1d
+    w_1d = w_1d * 2
+
+    num_points = n ** 3
+    xi = np.zeros((num_points, 3))
+    w = np.zeros(num_points)
+
+    idx = 0
+    for i in range(n):
+        for j in range(n):
+            for k in range(n):
+                xi[idx, 0] = x_1d[i]
+                xi[idx, 1] = x_1d[j]
+                xi[idx, 2] = x_1d[k]
+                w[idx] = w_1d[i] * w_1d[j] * w_1d[k]
+                idx += 1
+
+    return QuadratureRule(xi, w)

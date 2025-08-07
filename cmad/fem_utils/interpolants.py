@@ -170,7 +170,7 @@ def shape_brick(evaluationPoints):
     m2 = 1 - evaluationPoints[:, 1]
     p2 = 1 + evaluationPoints[:, 1]
     m3 = 1 - evaluationPoints[:, 2]
-    p3 = 1 + evaluationPoints[:, 3]
+    p3 = 1 + evaluationPoints[:, 2]
 
     shape = np.vstack((m1 * m2 * m3 / 8, p1 * m2 * m3 / 8, p1 * p2 * m3 / 8, m1 * p2 * m3 / 8,
                        m1 * m2 * p3 / 8, p1 * m2 * p3 / 8, p1 * p2 * p3 / 8, m1 * p2 * p3 / 8)).T

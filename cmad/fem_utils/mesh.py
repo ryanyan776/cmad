@@ -33,8 +33,8 @@ class Mesh():
 
             if self._mesh_type == "hole_block_half":
 
-                geom.characteristic_length_min = 0.02
-                geom.characteristic_length_max = 0.02
+                geom.characteristic_length_min = 0.03
+                geom.characteristic_length_max = 0.03
 
                 rectangle = geom.add_rectangle([0.0, 0.0, 0.0], 1.0, 0.5)
 
@@ -44,7 +44,7 @@ class Mesh():
                     rectangle,
                     disk
                 )
-                geom.extrude(flat, [0.0, 0.0, 0.0625], num_layers=7)
+                geom.extrude(flat, [0.0, 0.0, 0.0625], num_layers=5)
                 self._mesh = geom.generate_mesh()
 
                 self._points = self._mesh.points

@@ -360,7 +360,7 @@ class fem_problem():
             self._mesh = Mesh("hole_block_half")
 
             self._dt = 1.
-            self._num_steps = 100
+            self._num_steps = 10
             self._times = np.linspace(self._dt,
                                       self._dt * self._num_steps,
                                       self._num_steps)
@@ -378,7 +378,7 @@ class fem_problem():
 
             # fix all nodes on plane x = 0
             # set incremental displacements on plane x = 1
-            increment = 0.00005
+            increment = 0.0006
             disp_node = []
             disp_val = []
             for i in range(self._num_nodes):

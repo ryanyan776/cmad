@@ -1,6 +1,7 @@
 from cmad.fem_utils.fem_problem import fem_problem
 from cmad.fem_utils.elastic_plastic_small import Elastic_plastic_small
-from cmad.fem_utils.elastic_plastic_small_plane_stress import Elastic_plastic_small_plane_stress
+from cmad.fem_utils.elastic_plastic_small_plane_stress import \
+    Elastic_plastic_small_plane_stress
 import numpy as np
 import scipy.sparse.linalg
 import time
@@ -16,24 +17,23 @@ def newton_solve(model, num_steps, max_iters, tol):
 
             model.compute_local_state_variables()
             model.evaluate_local()
-            model.get_num_plastic_elements()
 
             model.evaluate_global()
             RF = model.scatter_rhs()
+            norm_resid = np.linalg.norm(RF)
             print('Iteration: ', i)
             print(" ||C|| = ", np.max(np.abs(model.C())),
-                  " ||R|| = ", np.linalg.norm(RF))
-            if (np.linalg.norm(RF) < tol):
+                  " ||R|| = ", norm_resid)
+            if (norm_resid < tol):
                 break
 
             model.evaluate_tang()
             KFF = model.scatter_lhs()
 
-            delta = scipy.sparse.linalg.spsolve(KFF, -RF)
+            KFF_factorized = scipy.sparse.linalg.factorized(KFF)
+            delta = KFF_factorized(-RF)
 
             model.add_to_UF(delta)
-            model.update_plot()
-
             model.reset_xi()
 
         model.save_global_fields()
@@ -61,9 +61,10 @@ def newton_solve_line_search(model, num_steps, max_iters, tol, s=0.8, m=8):
         RF = model.scatter_rhs()
 
         for i in range(max_iters):
+            norm_resid = np.linalg.norm(RF)
             print('Newton Iteration: ', i)
-            print("||R|| = ", np.linalg.norm(RF))
-            if (np.linalg.norm(RF) < tol):
+            print("||R|| = ", norm_resid)
+            if (norm_resid < tol):
                 break
 
             model.evaluate_tang()
@@ -126,21 +127,21 @@ def halley_solve(model, num_steps, max_iters, tol):
 
             model.evaluate_global()
             RF = model.scatter_rhs()
+            norm_resid = np.linalg.norm(RF)
+
             print('Iteration: ', i)
             print(" ||C|| = ", np.max(np.abs(model.C())),
-                  " ||R|| = ", np.linalg.norm(RF))
-            if (np.linalg.norm(RF) < tol):
+                  " ||R|| = ", norm_resid)
+            if (norm_resid < tol):
                 break
 
             model.evaluate_tang()
             KFF = model.scatter_lhs()
 
-            t1 = time.perf_counter()
             KFF_factorized = scipy.sparse.linalg.factorized(KFF)
-            t2 = time.perf_counter()
-            print("Factorizing stiffness: ", t2 - t1)
             delta = KFF_factorized(-RF)
-            if (i > 1):
+
+            if (i > 2):
                 model.set_newton_increment(delta)
                 halley_rhs = model.evaluate_halley_correction()
 
@@ -159,11 +160,11 @@ def halley_solve(model, num_steps, max_iters, tol):
         model.advance_model()
 
 order = 2
-problem = fem_problem("hole_block_traction", order, mixed=True)
+problem = fem_problem("hole_block_disp_sliding", order, mixed=True)
 num_steps, dt = problem.num_steps()
 
 max_iters = 20
-tol = 3e-10
+tol = 5e-13
 
 model = Elastic_plastic_small(problem)
 newton_solve(model, num_steps, max_iters, tol)

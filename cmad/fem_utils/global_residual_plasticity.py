@@ -79,7 +79,7 @@ class Global_residual_plasticity(ABC):
         self._batch_tang = jit(vmap(self._compute_tang, in_axes=mapped_axes))
 
         # Halley's method
-        mapped_halley_axes = [0, 0, None, 0, 0, 0, 0, 0, 0]
+        mapped_halley_axes = [0, 0, None, 0, 0, 0, 0, 0, 0, 0]
         self._batch_halley_correction = jit(vmap(self._compute_halley,
                                                  in_axes=mapped_halley_axes))
 
@@ -169,10 +169,11 @@ class Global_residual_plasticity(ABC):
 
     def evaluate_tang(self):
         variables = self._variables()
-        tang, dxi_du, dc_dxi_inv = self._batch_tang(*variables)
+        tang, dxi_du, dc_dxi_inv, dR_dxi = self._batch_tang(*variables)
         self._tang = np.asarray(tang)
         self._dxi_du = np.asarray(dxi_du)
         self._dc_dxi_inv = np.asarray(dc_dxi_inv)
+        self._dR_dxi = np.asarray(dR_dxi)
 
     def evaluate_global(self):
 
@@ -302,7 +303,7 @@ class Global_residual_plasticity(ABC):
 
         dR_du = self._global_jac[GlobalDerivType.DU](*variables)
         dR_dxi = self._global_jac[GlobalDerivType.DXI](*variables)
-        return dR_du + dR_dxi @ dxi_du, dxi_du, dc_dxi_inv
+        return dR_du + dR_dxi @ dxi_du, dxi_du, dc_dxi_inv, dR_dxi
 
     def initialize_plot(self):
         num_elem = self._volume_conn.shape[0]
@@ -357,7 +358,7 @@ class Global_residual_plasticity(ABC):
     # newton solve for local state variables
     def _local_resid_newton(self, u, u_prev, params, xi_0, xi_prev, elem_points):
         max_iters = 20
-        tol = 1e-8
+        tol = 1e-10
         init_state = (xi_0, xi_prev, params, u, u_prev, elem_points, 0, max_iters, tol)
         final_state = while_loop(self._newton_cond_fun, self._newton_body_fun, init_state)
         return final_state[0]
@@ -388,7 +389,7 @@ class Global_residual_plasticity(ABC):
 
     def _compute_halley(
             self, u, u_prev, params, xi, xi_prev, elem_points,
-            dc_dxi_inv, dxi_du, delta):
+            dc_dxi_inv, dxi_du, dR_dxi, delta):
 
         variables = u, u_prev, params, xi, xi_prev, elem_points
         d2C_du2 = self._local_hessian[GlobalDerivType.DU_DU](*variables)
@@ -399,24 +400,25 @@ class Global_residual_plasticity(ABC):
         d2R_dxi2 = self._global_hessian[GlobalDerivType.DXI_DXI](*variables)
         d2R_du_dxi = self._global_hessian[GlobalDerivType.DU_DXI](*variables)
 
-        dR_dxi = self._global_jac[GlobalDerivType.DXI](*variables)
+        v_n = dxi_du @ delta
+        a_j_v_n = jnp.outer(delta, v_n)
+        a_j_a_k = jnp.outer(delta, delta)
+        v_n_v_m = jnp.outer(v_n, v_n)
 
-        # compute d2xi_du2
-        rhs = jnp.einsum('ikn,nj->ijk', d2C_du_dxi, dxi_du) \
-                + jnp.einsum('inm,mk,nj->ijk', d2C_dxi2, dxi_du, dxi_du) \
-                + jnp.einsum('ijm,mk->ijk', d2C_du_dxi, dxi_du) \
-                + d2C_du2
-        d2xi_du2 = jnp.einsum('ni,ijk->njk', dc_dxi_inv, -rhs)
+        # compute d2xi_du2-vector contraction
+        cont_axes = ([1, 2], [0, 1])
+        rhs = 2 * jnp.tensordot(d2C_du_dxi, a_j_v_n, axes=cont_axes) \
+            + jnp.tensordot(d2C_dxi2, v_n_v_m, axes=cont_axes) \
+            + jnp.tensordot(d2C_du2, a_j_a_k, axes=cont_axes)
+        d2xi_du2_a_a = -dc_dxi_inv @ rhs
 
-        # compute hessian
-        d2R_dU2 = jnp.einsum('qkn,nj->qjk', d2R_du_dxi, dxi_du) \
-                    + jnp.einsum('qnm,mk,nj->qjk', d2R_dxi2, dxi_du, dxi_du) \
-                    + jnp.einsum('qn,njk->qjk', dR_dxi, d2xi_du2) \
-                    + jnp.einsum('qjm,mk->qjk', d2R_du_dxi, dxi_du) \
-                    + d2R_du2
+        # compute hessian-vector contraction
+        d2R_dU2_a_a = 2 * jnp.tensordot(d2R_du_dxi, a_j_v_n, axes=cont_axes) \
+                    + jnp.tensordot(d2R_dxi2, v_n_v_m, axes=cont_axes) \
+                    + jnp.tensordot(d2R_du2, a_j_a_k, axes=cont_axes) \
+                    + dR_dxi @ d2xi_du2_a_a
 
-        # compute halley correction RHS
-        return jnp.einsum('qjk,j,k->q', d2R_dU2, delta, delta)
+        return d2R_dU2_a_a
 
     def _compute_halley_fd(self, u, u_prev, params, xi, xi_prev, elem_points, delta):
         h = 1.e-3
@@ -435,6 +437,11 @@ class Global_residual_plasticity(ABC):
     def evaluate_halley_correction(self):
         variables = self._halley_variables()
         halley_batch = np.asarray(self._batch_halley_correction(*variables))
+
+        # compiled = self._batch_halley_correction.lower(*variables).compile()
+        # flops = compiled.cost_analysis()['flops']
+        # print(flops)
+
         halley_global = np.zeros(self._num_free_dof)
         np.add.at(halley_global, self._global_free_indices_vector,
                   halley_batch.ravel()[self._mask_vector])
@@ -453,7 +460,7 @@ class Global_residual_plasticity(ABC):
     def _halley_variables(self):
         return self._u_elem, self._u_elem_prev, self._params.values, \
             self._xi_elem, self._xi_elem_prev, self._elem_points, \
-            self._dc_dxi_inv, self._dxi_du, self._delta_elem
+            self._dc_dxi_inv, self._dxi_du, self._dR_dxi, self._delta_elem
 
     def _halley_variables_fd(self):
         return self._u_elem, self._u_elem_prev, self._params.values, \

@@ -448,6 +448,23 @@ class Global_residual_plasticity(ABC):
 
         return halley_global
 
+    def evaluate_halley_correction_multi(self, num_batches):
+        variables = self._halley_variables_multi(num_batches)
+        
+        halley_batch_all = np.empty_like(self._R)
+        pos = 0
+        for variable in variables:
+            batch = np.asarray(self._batch_halley_correction(*variable))
+            batch_size = batch.shape[0]
+            halley_batch_all[pos:pos + batch_size] = batch
+            pos += batch_size
+
+        halley_global = np.zeros(self._num_free_dof)
+        np.add.at(halley_global, self._global_free_indices_vector,
+                  halley_batch_all.ravel()[self._mask_vector])
+
+        return halley_global
+    
     def evaluate_halley_correction_fd(self):
         variables = self._halley_variables_fd()
         halley_batch = np.asarray(self._batch_halley_correction_fd(*variables))
@@ -461,6 +478,30 @@ class Global_residual_plasticity(ABC):
         return self._u_elem, self._u_elem_prev, self._params.values, \
             self._xi_elem, self._xi_elem_prev, self._elem_points, \
             self._dc_dxi_inv, self._dxi_du, self._dR_dxi, self._delta_elem
+
+    def _halley_variables_multi(self, num_batches):
+        vars = (
+            self._u_elem,
+            self._u_elem_prev,
+            self._params.values,   
+            self._xi_elem,
+            self._xi_elem_prev,
+            self._elem_points,
+            self._dc_dxi_inv,
+            self._dxi_du,
+            self._dR_dxi,
+            self._delta_elem
+        )
+
+        vars_split = []
+        for i, var in enumerate(vars):
+            if i == 2:  # index of self._params.values
+                vars_split.append([var] * num_batches)
+            else:
+                vars_split.append(np.array_split(var, num_batches))
+
+        result = list(zip(*vars_split))
+        return result
 
     def _halley_variables_fd(self):
         return self._u_elem, self._u_elem_prev, self._params.values, \

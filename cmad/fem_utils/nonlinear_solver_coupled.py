@@ -7,7 +7,7 @@ import scipy.sparse.linalg
 import time
 
 def newton_solve(model, num_steps, max_iters, tol):
-    model.initialize_plot()
+    # model.initialize_plot()
     for step in range(num_steps):
         print('Step: ', step)
         model.set_prescribed_dofs(step)
@@ -36,12 +36,12 @@ def newton_solve(model, num_steps, max_iters, tol):
             model.add_to_UF(delta)
             model.reset_xi()
 
-        model.save_global_fields()
+        # model.save_global_fields()
         model.advance_model()
-        model.update_plot()
+        # model.update_plot()
 
 def newton_solve_line_search(model, num_steps, max_iters, tol, s=0.8, m=8):
-    model.initialize_plot()
+    # model.initialize_plot()
     for step in range(num_steps):
         print('Timestep', step)
         # set displacement BCs
@@ -109,12 +109,12 @@ def newton_solve_line_search(model, num_steps, max_iters, tol, s=0.8, m=8):
                         RF = RF_new.copy()
                         break
 
-        model.save_global_fields()
-        model.update_plot()
+        # model.save_global_fields()
+        # model.update_plot()
         model.advance_model()
 
 def halley_solve(model, num_steps, max_iters, tol):
-    model.initialize_plot()
+    # model.initialize_plot()
     for step in range(num_steps):
         print('Timestep', step)
         model.set_prescribed_dofs(step)
@@ -143,7 +143,7 @@ def halley_solve(model, num_steps, max_iters, tol):
 
             if (i > 2):
                 model.set_newton_increment(delta)
-                halley_rhs = model.evaluate_halley_correction()
+                halley_rhs = model.evaluate_halley_correction_multi(6)
 
                 # # finite difference check for second derivative
                 # halley_rhs_fd = model.evaluate_halley_correction_fd()
@@ -155,11 +155,11 @@ def halley_solve(model, num_steps, max_iters, tol):
 
             model.reset_xi()
 
-        model.save_global_fields()
-        model.update_plot()
+        # model.save_global_fields()
+        # model.update_plot()
         model.advance_model()
 
-order = 2
+order = 3
 problem = fem_problem("hole_block_disp_sliding", order, mixed=True)
 num_steps, dt = problem.num_steps()
 

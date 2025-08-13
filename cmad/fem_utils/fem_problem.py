@@ -278,9 +278,10 @@ class fem_problem():
             self._disp_val = np.array(disp_val)
 
             # diagonal traction on z = 5
+            trac_increment = 5.0
             self._surf_traction_vector = np.zeros((self._num_steps, self._ndim))
-            self._surf_traction_vector[:, 0] = 1.0 * self._dt * np.arange(1, self._num_steps + 1)
-            self._surf_traction_vector[:, 1] = 1.0 * self._dt * np.arange(1, self._num_steps + 1)
+            self._surf_traction_vector[:, 0] = trac_increment * self._dt * np.arange(1, self._num_steps + 1)
+            self._surf_traction_vector[:, 1] = trac_increment * self._dt * np.arange(1, self._num_steps + 1)
             pres_surf_traction = []
             for surface in self._surface_conn:
                 surface_points = self._nodal_coords[surface, :]

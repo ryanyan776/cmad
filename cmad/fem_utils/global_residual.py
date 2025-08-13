@@ -7,7 +7,7 @@ from cmad.fem_utils.global_deriv_types import GlobalDerivType
 from abc import ABC
 from cmad.fem_utils.fem_utils import assemble_global_fields, assemble_prescribed
 
-from scipy.sparse import coo_matrix, csr_matrix
+from scipy.sparse import coo_matrix, csc_matrix
 
 class Global_residual(ABC):
     def __init__(
@@ -17,8 +17,15 @@ class Global_residual(ABC):
             surf_traction_vector):
 
         self._global_resid = jit(vmap(resid_fun, in_axes=[0, None, 0]))
-        self._global_jac = jit(vmap(jacfwd(resid_fun), in_axes=[0, None, 0]))
+        self._global_jac = [jit(vmap(jacfwd(resid_fun), in_axes=[0, None, 0])),
+                            jit(vmap(jacfwd(resid_fun, argnums=1), in_axes=[0, None, 0]))]
         self._surf_traction_batched = jit(vmap(elem_surf_traction, in_axes=[0, None]))
+
+        # Halley's method
+        mapped_halley_axes = [0, None, 0, 0]
+        self._global_hessian = jit(jacfwd(jacfwd(resid_fun)))
+        self._batch_halley_correction = jit(vmap(self._compute_halley,
+                                                 in_axes=mapped_halley_axes))
 
         self._deriv_mode = GlobalDerivType.DNONE
 
@@ -77,6 +84,12 @@ class Global_residual(ABC):
 
         # data storage
         self._point_data = []
+    
+    def initialize_variables(self):
+        return
+    
+    def advance_model(self):
+        return
 
     def evaluate(self):
 
@@ -87,7 +100,9 @@ class Global_residual(ABC):
             self._R = np.asarray(self._global_resid(*variables))
             self._Jac = None
         elif deriv_mode == GlobalDerivType.DU:
-            self._Jac = np.asarray(self._global_jac(*variables))
+            self._Jac = np.asarray(self._global_jac[0](*variables))
+        elif deriv_mode == GlobalDerivType.DParams:
+            self._Jac = np.asarray(self._global_jac[1](*variables))
 
     def R(self):
         return self._R
@@ -135,7 +150,7 @@ class Global_residual(ABC):
         return RF_global - self._FF
 
     def scatter_lhs(self):
-        KFF = csr_matrix(coo_matrix((self._Jac[:, self._ii, self._jj][self._mask_f],
+        KFF = csc_matrix(coo_matrix((self._Jac[:, self._ii, self._jj][self._mask_f],
                                     (self._row_f, self._col_f)),
                                     shape=(self._num_free_dof, self._num_free_dof)))
         return KFF
@@ -146,6 +161,36 @@ class Global_residual(ABC):
     def seed_U(self):
         self._deriv_mode = GlobalDerivType.DU
 
+    # Functions for Halley's method
+    #########################################
+    def set_newton_increment(self, delta_F):
+        delta_UR = assemble_global_fields(self._eq_num, delta_F, np.zeros(self._num_pres_dof))
+        self._delta_elem = delta_UR[self._volume_conn, :].transpose(0, 2, 1) \
+            .reshape(self._volume_conn.shape[0], -1)
+        
+    def _compute_halley(self, u, params, elem_points, delta):
+        variables = u, params, elem_points
+        d2R_dU2 = self._global_hessian(*variables)
+
+        cont_axes = ([1, 2], [0, 1])
+        return jnp.tensordot(d2R_dU2, jnp.outer(delta, delta), axes=cont_axes)
+
+    def evaluate_halley_correction(self):
+        variables = self._halley_variables()
+        halley_batch = np.asarray(self._batch_halley_correction(*variables))
+
+        # compiled = self._batch_halley_correction.lower(*variables).compile()
+        # flops = compiled.cost_analysis()['flops']
+        # print(flops)
+
+        halley_global = np.zeros(self._num_free_dof)
+        np.add.at(halley_global, self._global_free_indices_vector,
+                  halley_batch.ravel()[self._mask_vector])
+
+        return halley_global
+    
+    def _halley_variables(self):
+        return self._u_elem, self._params, self._elem_points, self._delta_elem
 
 
 

@@ -75,8 +75,12 @@ class Global_residual(ABC):
 
         # index arrays for traction vector assembly
         if not pres_surf_traction is None:
-            surf_global_indices_all = eq_num[:, :-1][pres_surf_traction, :]. \
-                transpose(0, 2, 1).reshape(pres_surf_traction.shape[0], -1)
+            if is_mixed:
+                surf_global_indices_all = eq_num[:, :-1][pres_surf_traction, :]. \
+                    transpose(0, 2, 1).reshape(pres_surf_traction.shape[0], -1)
+            else:
+                surf_global_indices_all = eq_num[pres_surf_traction, :]. \
+                    transpose(0, 2, 1).reshape(pres_surf_traction.shape[0], -1)
             flat_surf_global_free_indices = np.where(surf_global_indices_all > 0,
                                                     surf_global_indices_all - 1, -1).ravel()
             self._surf_valid_free_mask = flat_surf_global_free_indices >= 0
@@ -119,7 +123,7 @@ class Global_residual(ABC):
         UUR = assemble_global_fields(self._eq_num, self._UF, self._UP)
         if self._is_mixed:
             self._point_data.append({'displacement_field': UUR[:, :-1],
-                                    'pressure_field': UUR[:, -1]})
+                                     'pressure_field': UUR[:, -1]})
         else:
             self._point_data.append({'displacement_field': UUR})
 

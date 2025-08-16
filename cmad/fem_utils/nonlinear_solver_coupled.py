@@ -37,8 +37,8 @@ def newton_solve(model, num_steps, max_iters, tol):
             model.reset_xi()
 
         # model.save_global_fields()
-        model.advance_model()
         # model.update_plot()
+        model.advance_model()
 
 def newton_solve_line_search(model, num_steps, max_iters, tol, s=0.8, m=8):
     # model.initialize_plot()
@@ -138,13 +138,18 @@ def halley_solve(model, num_steps, max_iters, tol):
             model.evaluate_tang()
             KFF = model.scatter_lhs()
 
+            t1 = time.perf_counter()
             KFF_factorized = scipy.sparse.linalg.factorized(KFF)
+            t2 = time.perf_counter()
+            print("Factorize K: ", t2 - t1)
             delta = KFF_factorized(-RF)
 
-            if (i > 2):
+            if (i >= 3):
                 model.set_newton_increment(delta)
-                halley_rhs = model.evaluate_halley_correction_multi(6)
-
+                t1 = time.perf_counter()
+                halley_rhs = model.evaluate_halley_correction_multi(7)
+                t2 = time.perf_counter()
+                print("Halley correction: ", t2 - t1)
                 # # finite difference check for second derivative
                 # halley_rhs_fd = model.evaluate_halley_correction_fd()
                 # print(np.linalg.norm(halley_rhs - halley_rhs_fd))
@@ -159,12 +164,12 @@ def halley_solve(model, num_steps, max_iters, tol):
         # model.update_plot()
         model.advance_model()
 
-order = 3
-problem = fem_problem("hole_block_disp_sliding", order, mixed=True)
+order = 2
+problem = fem_problem("notched_bar", order, mixed=True)
 num_steps, dt = problem.num_steps()
 
 max_iters = 20
-tol = 5e-13
+tol = 1e-11
 
 model = Elastic_plastic_small(problem)
 newton_solve(model, num_steps, max_iters, tol)

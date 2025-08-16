@@ -412,6 +412,70 @@ class fem_problem():
             self._surf_traction_vector = None
             self._pres_surf_traction = None
 
+        if problem_type == "notched_bar":
+            self._quad_rule_3D = quad_rule_tetra
+            self._quad_rule_2D = quad_rule_tri
+            self._shape_func_3D = shape_func_tetra
+            self._shape_func_2D = shape_func_tri
+
+            self._ndim = 3
+            self._mesh = Mesh("notched_bar")
+
+            self._dt = 1.
+            self._num_steps = 20
+            self._times = np.linspace(self._dt,
+                                      self._dt * self._num_steps,
+                                      self._num_steps)
+
+            self._nodal_coords = self._mesh.get_nodal_coordinates()
+            self._volume_conn = self._mesh.get_volume_connectivity()
+            self._surface_conn = self._mesh.get_surface_connectivity()
+
+            # 4 dofs per node if there are pressure dofs
+            self._dof_node = 3 + mixed
+            self._num_nodes = len(self._nodal_coords)
+            self._num_nodes_elem = 4
+            self._num_elem = len(self._volume_conn)
+            self._num_nodes_surf = 3
+
+            # fix all nodes on plane x = 0
+            # set incremental displacements on plane x = 1
+            increment = 0.0003
+            disp_node = []
+            disp_val = []
+            for i in range(self._num_nodes):
+                x = self._nodal_coords[i][0]
+                y = self._nodal_coords[i][1]
+                z = self._nodal_coords[i][2]
+                if x == 0.0:
+                    disp_node.append(np.array([i, 1], dtype=int))
+                    disp_node.append(np.array([i, 3], dtype=int))
+                    disp_val.append(np.zeros(self._num_steps))
+                    disp_val.append(np.zeros(self._num_steps))
+
+                if x == 4.0:
+                    disp_node.append(np.array([i, 1], dtype=int))
+                    disp_node.append(np.array([i, 3], dtype=int))
+                    disp_val.append(np.linspace(increment * self._dt,
+                                                increment * self._dt * self._num_steps,
+                                                self._num_steps))
+                    disp_val.append(np.zeros(self._num_steps))
+                
+                if y == 0.0 and (x == 0.0 or x == 4.0):
+                    disp_node.append(np.array([i, 2], dtype=int))
+                    disp_val.append(np.zeros(self._num_steps))
+
+            if mixed:
+                disp_node.append(np.array([0, 4], dtype = int))
+                disp_val.append(np.zeros(self._num_steps))
+
+            self._disp_node = np.array(disp_node, dtype=int)
+            self._disp_val = np.array(disp_val)
+
+            # no tractions
+            self._surf_traction_vector = None
+            self._pres_surf_traction = None
+
         if problem_type == "hole_block_disp_sliding_2D":
             self._quad_rule_2D = quad_rule_tri
             self._shape_func_2D = shape_func_tri

@@ -44,6 +44,30 @@ class Mesh():
                     rectangle,
                     disk
                 )
+                geom.extrude(flat, [0.0, 0.0, 0.0625], num_layers=7)
+                self._mesh = geom.generate_mesh()
+
+                self._points = self._mesh.points
+                self._cells = self._mesh.cells
+                self._volume_conn = self._cells[2].data
+                self._surface_conn = self._cells[1].data
+                self._mesh.cells = [self._cells[2]]
+            
+            if self._mesh_type == "notched_bar":
+                geom.characteristic_length_min = 0.035
+                geom.characteristic_length_max = 0.035
+
+                width = 1.0
+                rectangle = geom.add_rectangle([0.0, 0.0, 0.0], 4.0, width)
+
+                disk1 = geom.add_disk([1.0, 0.0, 0.0], 0.5)
+                disk2 = geom.add_disk([3.0, 0.0, 0.0], 0.5)
+                disk3 = geom.add_disk([2.0, width, 0.0], 0.5)
+
+                flat = geom.boolean_difference(
+                    rectangle,
+                    [disk1, disk2, disk3]
+                )
                 geom.extrude(flat, [0.0, 0.0, 0.0625], num_layers=5)
                 self._mesh = geom.generate_mesh()
 

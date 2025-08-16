@@ -5,6 +5,7 @@ from cmad.fem_utils.thermo import Thermo
 import numpy as np
 import scipy.sparse.linalg
 import scipy.sparse as sp
+import time
 
 def newton_solve(model, num_steps, max_iters, tol):
     model.initialize_variables()
@@ -63,12 +64,18 @@ def halley_solve(model, num_steps, max_iters, tol):
             model.evaluate()
             KFF = model.scatter_lhs()
 
+            t1 = time.perf_counter()
             KFF_factorized = scipy.sparse.linalg.factorized(KFF)
+            t2 = time.perf_counter()
+            # print("Factorize K: ", t2 - t1)
             delta = KFF_factorized(-RF)
 
-            if (i > 0):
+            if (i > 2):
                 model.set_newton_increment(delta)
+                t1 = time.perf_counter()
                 halley_rhs = model.evaluate_halley_correction()
+                t2 = time.perf_counter()
+                # print("Halley correction: ", t2 - t1)
                 delta = delta ** 2 / (delta + 1 / 2 * KFF_factorized(halley_rhs))
 
             model.add_to_UF(delta)
@@ -77,15 +84,15 @@ def halley_solve(model, num_steps, max_iters, tol):
         model.advance_model()
 
 order = 2
-problem = fem_problem("vert_beam", order, mixed=True)
+problem = fem_problem("hole_block_disp_sliding", order, mixed=False)
 num_steps, dt = problem.num_steps()
 
 max_iters = 10
-tol = 1e-10
+tol = 5e-12
 
 model = Neo_hookean(problem)
 
-halley_solve(model, num_steps, max_iters, tol)
+newton_solve(model, num_steps, max_iters, tol)
 # point_data = model.get_data()
 # problem.save_data("rect_prism_thermoelastic_1.xdmf", point_data)
 
